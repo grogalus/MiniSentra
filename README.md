@@ -19,6 +19,8 @@ Sentra Scanner is an AWS Lambda function that scans S3 buckets in your AWS accou
 
 ## Deployment Steps
 ### deploy it as cloudformation stack (please use us-east-2 region for ease of deployment)
+
+### Only need to provide stack name
 https://console.aws.amazon.com/cloudformation/home?region=us-east-2#/stacks/create/review?templateURL=https://gal-mini-sentra-public.s3.amazonaws.com/templates/mini_sentra.yaml
 
 
