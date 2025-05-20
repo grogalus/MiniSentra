@@ -5,7 +5,7 @@ Sentra Scanner is an AWS Lambda function that scans S3 buckets in your AWS accou
 ## 🧩 Architecture
 
 1. **S3**: both Manual Trigger (Perform Full Scan) and Event Trigger are being supported -
-   - An event (e.g., "S3 Notification") cab trigger the Lambda function automaticlly (need to be configured manually as this time)
+   - An event (e.g., "S3 Notification") can trigger the Lambda function automaticlly (need to be configured manually as this time)
 3. **Lambda (Sentra Scanner)**: Downloads the file, scans for matches (e.g., email addresses), and sends results.
 4. **SQS Queue**: Collects results for downstream consumption or processing.
 
