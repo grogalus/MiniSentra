@@ -12,7 +12,7 @@ Sentra Scanner is an AWS Lambda function that scans S3 buckets in your AWS accou
 ## 🚀 Features
 
 - Scans new files in S3 buckets
-- Supports multiple file types (TXT, DOCX, XLSX) and can be extendable.
+- Supports multiple file types (TXT, CSV) and can be extendable to other file types
 - Extracts and identifies email addresses
 - Sends results to a SQS queue
 
