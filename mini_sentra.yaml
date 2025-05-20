@@ -1,0 +1,174 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Mini Sentra Stack Deployment'
+
+Parameters:
+  ResultBucketName:
+    Type: String
+    Description: Name of the S3 bucket to store results
+    Default: sentra-email-results
+  
+  CodeS3Bucket:
+    Type: String
+    Description: S3 bucket containing the Lambda deployment package
+    Default: gal-mini-sentra-public
+    
+  CodeS3Key:
+    Type: String
+    Description: S3 key for the Lambda deployment package (ZIP file)
+    Default: gal_mini_sentra.zip
+    
+  EnableSQS:
+    Type: String
+    Description: Enable SQS integration (true/false)
+    Default: true
+    AllowedValues:
+      - true
+      - false
+  
+  SQSQueueURL:
+    Type: String
+    Description: Optional custom SQS queue URL (if not using the created queue)
+    Default: ''
+  
+  SQSEndpointURL:
+    Type: String
+    Description: Optional custom endpoint URL for SQS
+    Default: ''
+
+Resources:
+  # SQS Queue for Lambda to send messages to
+  MiniSentraSQS:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: minisentrasqs
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 1209600  # 14 days
+      
+  # SQS Queue Policy
+  MiniSentraSQSPolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref MiniSentraSQS
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !GetAtt LambdaExecutionRole.Arn
+            Action:
+              - sqs:SendMessage
+              - sqs:GetQueueAttributes
+              - sqs:GetQueueUrl
+            Resource: !GetAtt MiniSentraSQS.Arn
+      
+  # Sentra Lambda function
+  MiniSentraLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: MiniSentraLambda
+      Description: Extracts emails from files in S3 buckets
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          RESULT_BUCKET: !Ref ResultBucketName
+          ENABLE_SQS: !Ref EnableSQS
+          SQS_QUEUE_URL: !If [UseCustomSQS, !Ref SQSQueueURL, !Ref MiniSentraSQS]
+          SQS_ENDPOINT_URL: !Ref SQSEndpointURL
+      Code:
+        S3Bucket: !Ref CodeS3Bucket
+        S3Key: !Ref CodeS3Key
+        
+  # Lambda execution role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: mini-sentra-lambda-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3AccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:HeadObject
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListAllMyBuckets
+                Resource: '*'
+        - PolicyName: SQSAccessPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:GetQueueUrl
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt MiniSentraSQS.Arn
+
+  # Result bucket for storing extracted emails and file hashes
+  ResultBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref ResultBucketName
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+Conditions:
+  UseCustomSQS: !Not [!Equals [!Ref SQSQueueURL, '']]
+
+Outputs:
+  LambdaFunctionName:
+    Description: "Name of the Lambda function"
+    Value: !Ref MiniSentraLambda
+  
+  LambdaFunctionARN:
+    Description: "ARN of the Lambda function"
+    Value: !GetAtt MiniSentraLambda.Arn
+  
+  ResultBucketName:
+    Description: "Name of the S3 bucket for results"
+    Value: !Ref ResultBucket
+  
+  ResultBucketARN:
+    Description: "ARN of the S3 bucket for results"
+    Value: !GetAtt ResultBucket.Arn
+  
+  SQSQueueURL:
+    Description: "URL of the created SQS queue"
+    Value: !Ref MiniSentraSQS
+    
+  SQSQueueARN:
+    Description: "ARN of the created SQS queue"
+    Value: !GetAtt MiniSentraSQS.Arn
+  
+  DeploymentInstructions:
+    Description: "Instructions for triggering the scanner manually"
+    Value: "To manually trigger a full bucket scan, invoke the Lambda function from the AWS console or use the AWS CLI command: aws lambda invoke --function-name MiniSentraLambda output.txt"
